@@ -1,54 +1,55 @@
 import cv2
 import numpy as np
-import mediapipe as mp
+import pandas as pd
+import os
+from scipy.signal import find_peaks, savgol_filter
 from modules.calculateAngle import calculate_angle
 from modules.midpoint import midpoint
 from modules.smoothAngle import smooth_angle
-import pandas as pd
-from scipy.signal import find_peaks, savgol_filter
-import os
 
-def extract_squat_features(video_path, min_rom=20, view="side", show_video=False, draw_keypoints=False):
+
+from mediapipe.python.solutions import pose as mp_pose_module
+from mediapipe.python.solutions import drawing_utils as mp_drawing
+
+mp_pose_class = mp_pose_module.Pose
+mp_drawing = mp_drawing
+
+def extract_squat_features_from_frames(frame_folder, min_rom=20, view="side", draw_keypoints=False):
     """
-    Extract per-rep squat features from a video (side or front view).
+    Extract per-rep squat features from a folder of frames (side or front view).
 
     Args:
-        video_path (str): Path to the video file.
+        frame_folder (str): Path to the folder containing frame images.
         min_rom (float): Minimum hip ROM to count as a valid rep.
         view (str): "side" or "front"
-        show_video (bool): Whether to display video with overlays.
         draw_keypoints (bool): Whether to draw mediapipe keypoints.
 
     Returns:
         List[dict]: Per-rep features with video_name included.
     """
-    video_name = os.path.basename(video_path)
-    mp_pose = mp.solutions.pose
-    mp_drawing = mp.solutions.drawing_utils
+    video_name = os.path.basename(frame_folder.rstrip("/\\"))
+    pose = mp_pose_class(
+        static_image_mode=False,
+        model_complexity=1,
+        enable_segmentation=False,
+        min_detection_confidence=0.1,
+        min_tracking_confidence=0.1
+    )
 
-    pose = mp_pose.Pose(static_image_mode=False,
-                        model_complexity=1,
-                        enable_segmentation=False,
-                        min_detection_confidence=0.1,
-                        min_tracking_confidence=0.1)
-
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-
+    # Get all frame files sorted
+    frame_files = sorted([f for f in os.listdir(frame_folder)
+                          if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
+    fps = 30  # Assume 30 fps for time calculation
     prev_knee = prev_hip = prev_torso = None
 
-    hip_angles = []
-    knee_angles = []
-    torso_angles = []
-    lateral_lean = []  # front view
-    symmetry = []      # front view
-    hip_y_positions = []  # for rep detection in front view
-    frames = []
+    hip_angles, knee_angles, torso_angles = [], [], []
+    lateral_lean, symmetry, hip_y_positions = [], [], []
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    for frame_file in frame_files:
+        frame_path = os.path.join(frame_folder, frame_file)
+        frame = cv2.imread(frame_path)
+        if frame is None:
+            continue
 
         frame_resized = cv2.resize(frame, (640, 480))
         frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
@@ -59,21 +60,21 @@ def extract_squat_features(video_path, min_rom=20, view="side", show_video=False
             h, w, _ = frame_resized.shape
 
             # Keypoints
-            left_hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x * w,
-                        landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y * h]
-            right_hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x * w,
-                         landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y * h]
+            left_hip = [landmarks[mp_pose_module.PoseLandmark.LEFT_HIP.value].x * w,
+                        landmarks[mp_pose_module.PoseLandmark.LEFT_HIP.value].y * h]
+            right_hip = [landmarks[mp_pose_module.PoseLandmark.RIGHT_HIP.value].x * w,
+                         landmarks[mp_pose_module.PoseLandmark.RIGHT_HIP.value].y * h]
             hip = midpoint(left_hip, right_hip)
 
-            left_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x * w,
-                             landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y * h]
-            right_shoulder = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x * w,
-                              landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y * h]
+            left_shoulder = [landmarks[mp_pose_module.PoseLandmark.LEFT_SHOULDER.value].x * w,
+                             landmarks[mp_pose_module.PoseLandmark.LEFT_SHOULDER.value].y * h]
+            right_shoulder = [landmarks[mp_pose_module.PoseLandmark.RIGHT_SHOULDER.value].x * w,
+                              landmarks[mp_pose_module.PoseLandmark.RIGHT_SHOULDER.value].y * h]
             shoulder = midpoint(left_shoulder, right_shoulder)
 
-            ear_landmark = landmarks[mp_pose.PoseLandmark.LEFT_EAR.value]
-            left_shoulder_vis = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].visibility
-            right_shoulder_vis = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].visibility
+            ear_landmark = landmarks[mp_pose_module.PoseLandmark.LEFT_EAR.value]
+            left_shoulder_vis = landmarks[mp_pose_module.PoseLandmark.LEFT_SHOULDER.value].visibility
+            right_shoulder_vis = landmarks[mp_pose_module.PoseLandmark.RIGHT_SHOULDER.value].visibility
 
             if ear_landmark.visibility >= 0.5:
                 torso_top = [ear_landmark.x * w, ear_landmark.y * h]
@@ -83,12 +84,11 @@ def extract_squat_features(video_path, min_rom=20, view="side", show_video=False
                 vector = np.array(shoulder) - np.array(hip)
                 torso_top = (np.array(shoulder) + vector * 0.5).tolist()
 
-            # Side view: sagittal angles
             if view == "side":
-                knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x * w,
-                        landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y * h]
-                ankle = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x * w,
-                         landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y * h]
+                knee = [landmarks[mp_pose_module.PoseLandmark.LEFT_KNEE.value].x * w,
+                        landmarks[mp_pose_module.PoseLandmark.LEFT_KNEE.value].y * h]
+                ankle = [landmarks[mp_pose_module.PoseLandmark.LEFT_ANKLE.value].x * w,
+                         landmarks[mp_pose_module.PoseLandmark.LEFT_ANKLE.value].y * h]
 
                 knee_angle = calculate_angle(hip, knee, ankle)
                 hip_flexion_angle = calculate_angle(shoulder, hip, knee)
@@ -104,14 +104,13 @@ def extract_squat_features(video_path, min_rom=20, view="side", show_video=False
                 knee_angles.append(smoothed_knee)
                 torso_angles.append(smoothed_torso)
 
-            # Front view: lateral features
             elif view == "front":
                 hip_y_positions.append(hip[1])
                 knee_angle_front = calculate_angle([hip[0], hip[1]],
-                                                   [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x * w,
-                                                    landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y * h],
-                                                   [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x * w,
-                                                    landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y * h])
+                                                   [landmarks[mp_pose_module.PoseLandmark.LEFT_KNEE.value].x * w,
+                                                    landmarks[mp_pose_module.PoseLandmark.LEFT_KNEE.value].y * h],
+                                                   [landmarks[mp_pose_module.PoseLandmark.LEFT_ANKLE.value].x * w,
+                                                    landmarks[mp_pose_module.PoseLandmark.LEFT_KNEE.value].y * h])
                 hip_angles.append(knee_angle_front)
 
                 torso_mid = midpoint(left_shoulder, right_shoulder)
@@ -122,28 +121,28 @@ def extract_squat_features(video_path, min_rom=20, view="side", show_video=False
                 hip_width = abs(left_hip[0] - right_hip[0])
                 symmetry.append(shoulder_width / hip_width)
 
-            if show_video:
+            if draw_keypoints:
                 overlay = frame_resized.copy()
-                if draw_keypoints:
-                    mp_drawing.draw_landmarks(
-                        overlay,
-                        results.pose_landmarks,
-                        mp_pose.POSE_CONNECTIONS,
-                        mp_drawing.DrawingSpec(color=(0,255,0), thickness=2, circle_radius=2),
-                        mp_drawing.DrawingSpec(color=(0,0,255), thickness=2)
-                    )
+                mp_drawing.draw_landmarks(
+                    overlay,
+                    results.pose_landmarks,
+                    mp_pose_module.POSE_CONNECTIONS,
+                    mp_drawing.DrawingSpec(color=(0,255,0), thickness=2, circle_radius=2),
+                    mp_drawing.DrawingSpec(color=(0,0,255), thickness=2)
+                )
                 cv2.imshow("Pose Detection", overlay)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
-    cap.release()
-    cv2.destroyAllWindows()
     pose.close()
+    cv2.destroyAllWindows()
 
     # Post-processing: rep detection
     hip_array = np.array(hip_y_positions if view == "front" else hip_angles)
     frame_times = np.arange(len(hip_array)) / fps
-    hip_smooth = savgol_filter(hip_array, window_length=15, polyorder=2)
+    if len(hip_array) < 5:
+        return []  # too few frames
+    hip_smooth = savgol_filter(hip_array, window_length=min(15, len(hip_array)//2*2+1), polyorder=2)
 
     min_indices, _ = find_peaks(-hip_smooth, distance=int(fps*0.5))
     max_indices, _ = find_peaks(hip_smooth, distance=int(fps*0.5))
