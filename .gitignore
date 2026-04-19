@@ -8,3 +8,5 @@ __pycache__/
 *.exe
 dataset/
 videos/
+writeup screenshots/
+testVideos/

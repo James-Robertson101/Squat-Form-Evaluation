@@ -22,11 +22,11 @@ from xgboost import XGBClassifier
 
 warnings.filterwarnings('ignore')
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
+# Paths 
 FRONT_CSV = r"C:\Users\james\Squat Form Evaluation\datasets\front\front_view_merged.csv"
 SIDE_CSV  = r"C:\Users\james\Squat Form Evaluation\datasets\side\side_view_merged.csv"
 
-# ── Feature columns (must match extract_squat_features_from_frames output) ─────
+# Feature columns (must match extract_squat_features_from_frames output) 
 FRONT_FEATURES = [
     "valgus_min", "valgus_max", "valgus_variation",
     "torso_lateral_peak", "symmetry_mean",

@@ -1,14 +1,10 @@
 # Squat-Form-Evaluation
-Using mediapipe to train a model to evaluate squat form based on bias and safety.
+Using mediapipe to train a model to evaluate squat form based on efficiency and safety.
 
-feature extraction ✅
+here is the pipeline for the project:
+1. split videos into frames
+2. extract features from frames
+3. predict labels using trained model
+4. map these integers to corresponding feedback
+5. output feedback in human readable form.
 
-labelling data using label-studio 
-
-training classification model
-
-evaluating model
-
-building app
-
-due 1st may

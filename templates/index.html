@@ -2,95 +2,35 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Squat Form Evaluator</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
-    .upload-section { display: flex; gap: 40px; margin: 30px 0; }
-    .view-box { flex: 1; border: 2px dashed #ccc; border-radius: 8px; padding: 20px; text-align: center; }
-    .view-box h3 { margin-top: 0; }
-    button { background: #2563eb; color: white; border: none; padding: 12px 30px;
-             border-radius: 6px; font-size: 16px; cursor: pointer; width: 100%; margin-top: 20px; }
-    button:disabled { background: #9ca3af; }
-    #results { margin-top: 30px; }
-    .result-panel { border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 15px 0; }
-    .result-panel h3 { margin-top: 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 10px; }
-    .feedback-item { padding: 6px 0; font-size: 15px; }
-    .error { color: #dc2626; }
-    #loading { display: none; text-align: center; padding: 20px; color: #6b7280; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Squat Analyser</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <h1>🏋️ Squat Form Evaluator</h1>
-  <p>Upload your front and side view squat videos for AI-powered form analysis.</p>
 
-  <div class="upload-section">
-    <div class="view-box">
-      <h3>📹 Front View</h3>
-      <input type="file" id="front_video" accept="video/*">
+  <main>
+    <h1>Squat analyser</h1>
+
+    <div class="upload-card">
+      <label for="video-input">Upload your squat video</label>
+      <input type="file" id="video-input" accept="video/*">
+
+      <div class="view-toggle">
+        <label><input type="radio" name="view" value="side" checked> Side view</label>
+        <label><input type="radio" name="view" value="front"> Front view</label>
+      </div>
+
+      <button id="analyse-btn" onclick="analyseVideo()">Analyse</button>
+      <p id="status-msg"></p>
     </div>
-    <div class="view-box">
-      <h3>📹 Side View</h3>
-      <input type="file" id="side_video" accept="video/*">
+
+    <div id="results" style="display:none">
+      <div id="rep-tabs" class="rep-tabs"></div>
+      <div id="summary-bar" class="summary-bar"></div>
+      <div id="feedback-cards" class="feedback-cards"></div>
     </div>
-  </div>
+  </main>
 
-  <button id="analyseBtn" onclick="analyse()">Analyse My Squat</button>
-  <div id="loading">⏳ Analysing your videos, please wait...</div>
-  <div id="results"></div>
-
-  <script>
-    async function analyse() {
-      const frontFile = document.getElementById('front_video').files[0];
-      const sideFile  = document.getElementById('side_video').files[0];
-
-      if (!frontFile || !sideFile) {
-        alert('Please upload both front and side view videos.');
-        return;
-      }
-
-      const btn = document.getElementById('analyseBtn');
-      btn.disabled = true;
-      document.getElementById('loading').style.display = 'block';
-      document.getElementById('results').innerHTML = '';
-
-      const formData = new FormData();
-      formData.append('front_video', frontFile);
-      formData.append('side_video',  sideFile);
-
-      try {
-        const response = await fetch('/analyse', { method: 'POST', body: formData });
-        const data = await response.json();
-        renderResults(data);
-      } catch (err) {
-        document.getElementById('results').innerHTML =
-          `<p class="error">Request failed: ${err.message}</p>`;
-      } finally {
-        btn.disabled = false;
-        document.getElementById('loading').style.display = 'none';
-      }
-    }
-
-    function renderResults(data) {
-      const container = document.getElementById('results');
-      let html = '<h2>Results</h2>';
-
-      for (const view of ['front', 'side']) {
-        const r = data[view];
-        html += `<div class="result-panel">
-          <h3>${view.charAt(0).toUpperCase() + view.slice(1)} View
-            ${r.rep_count ? `— ${r.rep_count} rep(s) detected` : ''}</h3>`;
-
-        if (r.error) {
-          html += `<p class="error">⚠️ ${r.error}</p>`;
-        } else {
-          r.feedback.forEach(f => {
-            html += `<div class="feedback-item">${f}</div>`;
-          });
-        }
-        html += '</div>';
-      }
-      container.innerHTML = html;
-    }
-  </script>
+  <script src="{{ url_for('static', filename='feedback.js') }}"></script>
 </body>
 </html>

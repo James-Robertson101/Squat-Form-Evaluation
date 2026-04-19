@@ -1,0 +1,249 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f5f5f3;
+  color: #1a1a18;
+  line-height: 1.7;
+}
+
+main {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+h1 {
+  font-size: 22px;
+  font-weight: 500;
+  margin-bottom: 1.5rem;
+}
+
+/* Upload card */
+.upload-card {
+  background: #ffffff;
+  border: 0.5px solid rgba(0,0,0,0.15);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.upload-card label {
+  font-size: 14px;
+  color: #5f5e5a;
+}
+
+.upload-card input[type="file"] {
+  font-size: 14px;
+  color: #1a1a18;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 14px;
+  color: #1a1a18;
+}
+
+.view-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: #1a1a18;
+}
+
+button#analyse-btn {
+  align-self: flex-start;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  background: transparent;
+  border: 0.5px solid rgba(0,0,0,0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+button#analyse-btn:hover {
+  background: #f0efeb;
+}
+
+button#analyse-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#status-msg {
+  font-size: 13px;
+  color: #5f5e5a;
+  min-height: 20px;
+}
+
+/* Rep tabs */
+.rep-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.rep-tab {
+  padding: 5px 14px;
+  font-size: 13px;
+  background: transparent;
+  border: 0.5px solid rgba(0,0,0,0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  color: #5f5e5a;
+  transition: background 0.15s;
+}
+
+.rep-tab:hover {
+  background: #f0efeb;
+}
+
+.rep-tab.active {
+  background: #e6f1fb;
+  color: #0c447c;
+  border-color: #378add;
+  font-weight: 500;
+}
+
+/* Summary bar */
+.summary-bar {
+  background: #f0efeb;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.sum-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sum-val {
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.sum-lbl {
+  font-size: 12px;
+  color: #5f5e5a;
+}
+
+.val-good { color: #3b6d11; }
+.val-warn { color: #854f0b; }
+.val-bad  { color: #791f1f; }
+
+/* Feedback cards grid */
+.feedback-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.fb-card {
+  background: #ffffff;
+  border: 0.5px solid rgba(0,0,0,0.12);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+
+.fb-label {
+  font-size: 12px;
+  color: #5f5e5a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.fb-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.fb-badge {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.badge-good { background: #639922; }
+.badge-warn { background: #ba7517; }
+.badge-bad  { background: #a32d2d; }
+
+.fb-status {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a18;
+}
+
+.fb-detail {
+  font-size: 13px;
+  color: #5f5e5a;
+  line-height: 1.5;
+}
+
+.cue-box {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-left: 2px solid #378add;
+  background: #e6f1fb;
+  border-radius: 0;
+}
+
+.cue-box p {
+  margin: 0;
+  font-size: 13px;
+  color: #0c447c;
+  line-height: 1.5;
+}
+
+.no-issue {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #3b6d11;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  body { background: #1c1c1a; color: #e0dfd8; }
+  .upload-card { background: #2a2a28; border-color: rgba(255,255,255,0.1); }
+  .upload-card label { color: #9c9a92; }
+  .upload-card input[type="file"] { color: #e0dfd8; }
+  .view-toggle label { color: #e0dfd8; }
+  button#analyse-btn { border-color: rgba(255,255,255,0.2); color: #e0dfd8; }
+  button#analyse-btn:hover { background: #333330; }
+  #status-msg { color: #9c9a92; }
+  .rep-tab { color: #9c9a92; border-color: rgba(255,255,255,0.15); }
+  .rep-tab:hover { background: #333330; }
+  .rep-tab.active { background: #0c447c; color: #b5d4f4; border-color: #185fa5; }
+  .summary-bar { background: #2a2a28; }
+  .sum-lbl { color: #9c9a92; }
+  .val-good { color: #97c459; }
+  .val-warn { color: #ef9f27; }
+  .val-bad  { color: #f09595; }
+  .fb-card { background: #2a2a28; border-color: rgba(255,255,255,0.08); }
+  .fb-label { color: #9c9a92; }
+  .fb-status { color: #e0dfd8; }
+  .fb-detail { color: #9c9a92; }
+  .cue-box { background: #042c53; border-color: #185fa5; }
+  .cue-box p { color: #85b7eb; }
+  .no-issue { color: #97c459; }
+}
