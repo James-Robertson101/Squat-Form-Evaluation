@@ -316,7 +316,7 @@ def extract_squat_features_from_frames(
     min_distance   = max(int(fps * 0.8), 5)
     min_prominence = signal_range * 0.20
 
-    bottom_indices, _ = find_peaks(
+    bottom_indices, _ = find_peaks( #find bottom positions using rep signal
         signal_for_peaks,
         distance=min_distance,
         prominence=min_prominence
@@ -343,33 +343,34 @@ def extract_squat_features_from_frames(
               f"min_prominence={min_prominence:.4f}")
 
     # Extract per-rep features
-    half_win = int(fps * 0.6)
-    n        = len(signal_for_peaks)
+    half_win = int(fps * 0.6) #window on either side of the bottom of the squat
+    n = len(signal_for_peaks)
 
     # Tempo search radius: up to 2 s either side of bottom
     tempo_radius = int(fps * 2.0)
 
     per_rep_features = []
 
-    for idx in bottom_indices:
-        start = max(0, idx - half_win)
+    for idx in bottom_indices: 
+        start = max(0, idx - half_win) #determining which frames are in the window start and end either side of the bottom position
         end   = min(n, idx + half_win)
 
         if end - start < 5:
             continue
 
-        def safe_slice(arr, s, e):
+        def safe_slice(arr, s, e): #numpy array slicing function
             sliced = np.array(arr[s:e], dtype=float)
             return sliced[~np.isnan(sliced)]
 
-        foot_heel = safe_slice(heel_displacements, start, end)
-        foot_toe  = safe_slice(toe_displacements,  start, end)
-
-        # SIDE VIEW — per-rep feature dict
+        foot_heel = safe_slice(heel_displacements, start, end) 
+        foot_toe  = safe_slice(toe_displacements,  start, end)  
+        # these landmark frames are used for both frontal and sagittal views so before the if block that seperates concerns
+        
+        # Side view
         if view == "side":
-            hip_rep   = safe_slice(hip_angles,        start, end)
-            knee_rep  = safe_slice(knee_angles,       start, end)
-            torso_rep = safe_slice(torso_angles,      start, end)
+            hip_rep   = safe_slice(hip_angles, start, end)
+            knee_rep  = safe_slice(knee_angles, start, end)
+            torso_rep = safe_slice(torso_angles, start, end)
             lean_rep  = safe_slice(torso_lean_angles, start, end)
             kot_rep   = safe_slice(knee_over_toe,     start, end)
             hbk_rep   = safe_slice(hip_below_knee_arr, start, end)
@@ -390,35 +391,25 @@ def extract_squat_features_from_frames(
             hip_below_knee_frac = np.nanmean(hbk_rep) if len(hbk_rep) else np.nan
 
             per_rep_features.append({
-                # Original
+                # Writing side view features to per_rep_features dictionary
                 "video_name":       video_name,
                 "hip_rom":          np.nanmax(hip_rep)  - np.nanmin(hip_rep),
                 "knee_rom":         np.nanmax(knee_rep) - np.nanmin(knee_rep),
                 "torso_stability":  np.nanstd(torso_rep),
                 "heel_instability": np.nanstd(foot_heel) if len(foot_heel) else np.nan,
                 "toe_instability":  np.nanstd(foot_toe)  if len(foot_toe)  else np.nan,
-
-                # NEW — absolute depth
                 "knee_min_angle":   np.nanmin(knee_rep),
                 "hip_min_angle":    np.nanmin(hip_rep),
-
-                # NEW — forward lean
                 "torso_lean_peak":  np.nanmax(lean_rep)  if len(lean_rep) else np.nan,
                 "torso_lean_mean":  np.nanmean(lean_rep) if len(lean_rep) else np.nan,
-
-                # NEW — tempo
                 "descent_frames":        float(descent_frames),
                 "ascent_frames":         float(ascent_frames),
                 "descent_ascent_ratio":  descent_ascent_ratio,
-
-                # NEW — knee travel
                 "knee_over_toe_mean": np.nanmean(kot_rep) if len(kot_rep) else np.nan,
                 "knee_over_toe_max":  np.nanmax(kot_rep)  if len(kot_rep) else np.nan,
-
-                # NEW — squat depth standard
                 "hip_below_knee_frac": hip_below_knee_frac,
+            
             })
-        # FRONT VIEW — per-rep feature dict
         elif view == "front":
             val_rep   = safe_slice(valgus_ratios,       start, end)
             lat_rep   = safe_slice(lateral_lean,         start, end)

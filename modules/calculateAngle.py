@@ -11,5 +11,5 @@ def calculate_angle(point1, point2, point3):
     
     if angle > 180.0:
         angle = 360-angle
-    
+
     return angle

@@ -1,0 +1,5 @@
+side features:
+video_name,hip_rom,knee_rom,torso_stability,heel_instability,toe_instability,knee_min_angle,hip_min_angle,torso_lean_peak,torso_lean_mean,descent_frames,ascent_frames,descent_ascent_ratio,knee_over_toe_mean,knee_over_toe_max,hip_below_knee_frac
+
+front features:
+video_name,valgus_min,valgus_max,valgus_variation,torso_lateral_peak,symmetry_mean,heel_wobble,heel_instability,toe_instability,knee_cave_frames,knee_cave_frac,knee_asym_mean,knee_asym_std,ankle_width_mean,ankle_width_std,hip_shift_max,hip_shift_std,sho_hip_offset_mean,sho_hip_offset_max

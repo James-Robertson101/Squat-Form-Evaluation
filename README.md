@@ -38,6 +38,9 @@ A web-based squat analysis system that evaluates squat form using computer visio
 
 ## Installation
 
+### Prerequisites
+- python
+
 ### 1. Clone the Repository
 
 ```bash
