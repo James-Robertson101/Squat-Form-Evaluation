@@ -3,34 +3,125 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Squat Analyser</title>
+  <title>SquatIQ — Form Analyser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
+  <header class="site-header">
+    <div class="logo">SQUAT<span>IQ</span></div>
+    <div class="header-tag">AI Form Analysis</div>
+  </header>
+
   <main>
-    <h1>Squat analyser</h1>
 
-    <div class="upload-card">
-      <label for="video-input">Upload your squat video</label>
-      <input type="file" id="video-input" accept="video/*">
-
-      <div class="view-toggle">
-        <label><input type="radio" name="view" value="side" checked> Side view</label>
-        <label><input type="radio" name="view" value="front"> Front view</label>
+    <!-- Upload card -->
+    <section class="upload-section">
+      <div class="upload-card" id="drop-zone">
+        <div class="upload-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p class="upload-prompt">Drop your squat video here or <label for="video-input" class="file-label">browse</label></p>
+        <p class="upload-sub">MP4, MOV, AVI · max 200 MB</p>
+        <input type="file" id="video-input" accept="video/*" style="display:none">
+        <div id="file-name-display" class="file-name-display" style="display:none"></div>
       </div>
 
-      <button id="analyse-btn" onclick="analyseVideo()">Analyse</button>
-      <p id="status-msg"></p>
-    </div>
+      <div class="controls-row">
+        <div class="view-toggle">
+          <span class="toggle-label">Camera angle</span>
+          <div class="toggle-pills">
+            <label class="pill">
+              <input type="radio" name="view" value="side" checked>
+              <span>Side view</span>
+            </label>
+            <label class="pill">
+              <input type="radio" name="view" value="front">
+              <span>Front view</span>
+            </label>
+          </div>
+        </div>
 
-    <div id="results" style="display:none">
-      <div id="rep-tabs" class="rep-tabs"></div>
+        <button id="analyse-btn" onclick="analyseVideo()">
+          <span class="btn-text">Analyse</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </div>
+
+      <div id="status-bar" class="status-bar" style="display:none">
+        <div class="status-spinner"></div>
+        <span id="status-msg"></span>
+      </div>
+
+      <div id="error-banner" class="error-banner" style="display:none"></div>
+    </section>
+
+    <!-- Results -->
+    <section id="results" style="display:none">
+
+      <!-- Rep selector -->
+      <div class="results-header">
+        <h2 class="results-title">Analysis Results</h2>
+        <div id="rep-tabs" class="rep-tabs"></div>
+      </div>
+
+      <!-- Summary bar -->
       <div id="summary-bar" class="summary-bar"></div>
-      <div id="feedback-cards" class="feedback-cards"></div>
-    </div>
+
+      <!-- Two-column layout: scrubber + feedback -->
+      <div class="results-grid">
+
+        <!-- Scrubber panel -->
+        <div id="scrubber-panel" class="scrubber-panel" style="display:none">
+          <div class="panel-label">FRAME PREVIEW</div>
+          <div class="scrubber-frame-wrap">
+            <img id="scrubber-img" src="" alt="Annotated frame" draggable="false">
+            <div class="frame-overlay-badge" id="frame-badge">1 / 1</div>
+          </div>
+          <div class="scrubber-controls">
+            <button class="ctrl-btn" id="prev-btn" onclick="stepFrame(-1)" title="Previous frame">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"/></svg>
+            </button>
+            <button class="ctrl-btn play-btn" id="play-btn" onclick="togglePlayback()">
+              <svg id="play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <svg id="pause-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            </button>
+            <button class="ctrl-btn" id="next-btn" onclick="stepFrame(1)" title="Next frame">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"/></svg>
+            </button>
+            <div class="speed-select-wrap">
+              <select id="speed-select" onchange="updatePlaybackSpeed()" class="speed-select">
+                <option value="6">0.2×</option>
+                <option value="10">0.3×</option>
+                <option value="15" selected>0.5×</option>
+                <option value="24">0.8×</option>
+                <option value="30">1×</option>
+              </select>
+            </div>
+          </div>
+          <input type="range" id="frame-slider" class="frame-slider" min="0" max="0" value="0"
+                 oninput="seekToFrame(parseInt(this.value))">
+        </div>
+
+        <!-- Feedback cards -->
+        <div class="feedback-col">
+          <div class="panel-label">FORM BREAKDOWN</div>
+          <div id="feedback-cards" class="feedback-cards"></div>
+        </div>
+
+      </div>
+    </section>
+
   </main>
 
   <script src="{{ url_for('static', filename='feedback.js') }}"></script>
 </body>
 </html>
+```

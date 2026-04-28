@@ -1,33 +1,33 @@
 """
 hyperparameter_tuning.py
-Grid-searches the best hyperparameters for:
-  - Random Forest  on the front view
-  - XGBoost        on the side view
-
-Uses a RemappingMultiOutputClassifier wrapper so label indices are always
-consecutive integers within each CV fold, which XGBoost requires.
-Feature columns are declared explicitly — a stale CSV will raise a clear error.
+Runs a group-aware grid search across six classifiers for both the front
+and side view datasets. Groups by video name so no video leaks across
+the train/test boundary.
 """
 
 import pandas as pd
 import numpy as np
 import warnings
-from sklearn.model_selection import KFold, GridSearchCV
+
+from sklearn.model_selection import GroupKFold, GroupShuffleSplit, GridSearchCV
 from sklearn.multioutput import MultiOutputClassifier
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import f1_score, make_scorer
-from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import f1_score
+from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from xgboost import XGBClassifier
-
+from Remapper import RemappingMultiOutputClassifier
 warnings.filterwarnings('ignore')
-
-# Paths
+ 
 FRONT_CSV = r"C:\Users\james\Squat Form Evaluation\datasets\front\front_view_merged.csv"
 SIDE_CSV  = r"C:\Users\james\Squat Form Evaluation\datasets\side\side_view_merged.csv"
 
-# Feature columns
 FRONT_FEATURES = [
     "valgus_min", "valgus_max", "valgus_variation",
     "torso_lateral_peak", "symmetry_mean",
@@ -54,9 +54,7 @@ FRONT_LABELS = ["knee_valgus", "knee_varus", "lateral_hip_shift",
 
 SIDE_LABELS  = ["squat_depth", "lumbar_flexion", "forward_lean",
                 "descent_control", "ascent_sticking", "foot_stability"]
-
-
-# Helpers
+ 
 def validate_columns(df: pd.DataFrame, required: list, csv_path: str) -> None:
     missing = [c for c in required if c not in df.columns]
     if missing:
@@ -67,137 +65,278 @@ def validate_columns(df: pd.DataFrame, required: list, csv_path: str) -> None:
         )
 
 
-def preprocess(X: pd.DataFrame):
-    """Fit imputer + scaler on X and return transformed array."""
-    imputer = SimpleImputer(strategy='median')
-    scaler  = StandardScaler()
-    return scaler.fit_transform(imputer.fit_transform(X))
-
-
-# Remapping wrapper (could in theory be taken out, was used for XGBOOST initially however I changed the feature extraction algorithm and now RandomForest is best for both)
-class RemappingMultiOutputClassifier(BaseEstimator, ClassifierMixin):
+def remap_labels(y_train: pd.DataFrame, y_test: pd.DataFrame):
     """
-    Wraps MultiOutputClassifier and remaps label columns to consecutive
-    0-based integers on every call to fit(), based only on the training data.
+    Fits label encoders on training data only then applies to both splits.
+    Unseen test labels get mapped to -1 so they fail visibly rather than silently.
     """
-
-    def __init__(self, estimator):
-        self.estimator = estimator
-
-    def fit(self, X, y):
-        y = pd.DataFrame(y) if not isinstance(y, pd.DataFrame) else y.reset_index(drop=True)
-        self.encoders_ = {}
-        y_remapped = y.copy()
-        for col in y.columns:
-            unique_vals = sorted(y[col].unique())
-            mapping = {v: i for i, v in enumerate(unique_vals)}
-            self.encoders_[col] = mapping
-            y_remapped[col] = y[col].map(mapping)
-        self.model_ = MultiOutputClassifier(self.estimator)
-        self.model_.fit(X, y_remapped)
-        self.columns_ = list(y.columns)
-        return self
-
-    def predict(self, X):
-        return self.model_.predict(X)
-
-    def get_params(self, deep=True):
-        params = {'estimator': self.estimator}
-        if deep:
-            for k, v in self.estimator.get_params(deep=True).items():
-                params[f'estimator__{k}'] = v
-        return params
-
-    def set_params(self, **params):
-        est_params = {}
-        for k, v in params.items():
-            if k == 'estimator':
-                self.estimator = v
-            elif k.startswith('estimator__'):
-                est_params[k[len('estimator__'):]] = v
-        if est_params:
-            self.estimator.set_params(**est_params)
-        return self
+    y_train_r = y_train.copy()
+    y_test_r  = y_test.copy()
+    for col in y_train.columns:
+        unique_vals = sorted(y_train[col].unique())
+        mapping = {v: i for i, v in enumerate(unique_vals)}
+        y_train_r[col] = y_train[col].map(mapping)
+        # unseen labels in test → map to -1 so they don't crash but are counted wrong
+        y_test_r[col]  = y_test[col].map(mapping).fillna(-1).astype(int)
+    return y_train_r, y_test_r
 
 
-# Custom scorer: mean weighted F1 across all output labels
 def multioutput_f1(y_true, y_pred):
+    """mean weighted F1 across all output labels — used as the grid search scorer"""
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
     scores = [
-        f1_score(y_true[:, i], y_pred[:, i], average='weighted', zero_division=0)
+        f1_score(y_true[:, i], y_pred[:, i],
+                 average='weighted', zero_division=0)
         for i in range(y_true.shape[1])
     ]
-    return np.mean(scores)
-
-custom_scorer = make_scorer(multioutput_f1)
-CV            = KFold(n_splits=5, shuffle=True, random_state=42)
+    return float(np.mean(scores))
 
 
-# Tune Random Forest — Front view
-def tune_front():
-    print("  Tuning Random Forest — Front View: ")
-    df = pd.read_csv(FRONT_CSV)
-    validate_columns(df, FRONT_FEATURES + FRONT_LABELS, FRONT_CSV)
-
-    X = preprocess(df[FRONT_FEATURES])
-    y = df[FRONT_LABELS]
-
-    # RF does not need the remapping wrapper because it accepts any integers,
-    # but we use it anyway for consistency across both tuning runs.
-    param_grid = {
-        'estimator__n_estimators':    [100, 200, 300],
-        'estimator__max_depth':       [None, 5, 10],
-        'estimator__max_features':    ['sqrt', 'log2'],
-        'estimator__min_samples_split': [2, 5],
-    }
-
-    grid = GridSearchCV(
-        RemappingMultiOutputClassifier(RandomForestClassifier(random_state=42)),
-        param_grid = param_grid,
-        cv         = CV,
-        scoring    = custom_scorer,
-        n_jobs     = -1,
-        verbose    = 1,
-    )
-    grid.fit(X, y)
-
-    print(f"\n  Best params : {grid.best_params_}")
-    print(f"  Best CV F1  : {grid.best_score_:.3f}")
-    return grid.best_params_, grid.best_score_
+def exact_match(y_true, y_pred):
+    return float((np.array(y_true) == np.array(y_pred)).all(axis=1).mean())
 
 
-def tune_side():
-    print("  Tuning Random Forest — Side View")
-    df = pd.read_csv(SIDE_CSV)
-    validate_columns(df, SIDE_FEATURES + SIDE_LABELS, SIDE_CSV)
-    X = preprocess(df[SIDE_FEATURES])
-    y = df[SIDE_LABELS]
-    param_grid = {
-        'estimator__n_estimators':    [100, 200, 300],
-        'estimator__max_depth':       [None, 5, 10],
-        'estimator__max_features':    ['sqrt', 'log2'],
-        'estimator__min_samples_split': [2, 5],
-    }
-    grid = GridSearchCV(
-        RemappingMultiOutputClassifier(
-            RandomForestClassifier(random_state=42)
-        ),
-        param_grid=param_grid,
-        cv=CV,
-        scoring=custom_scorer,
-        n_jobs=-1,
-        verbose=1,
-    )
-    grid.fit(X, y)
-    print(f"\n  Best params : {grid.best_params_}")
-    print(f"  Best CV F1  : {grid.best_score_:.3f}")
-    return grid.best_params_, grid.best_score_
+def hamming(y_true, y_pred):
+    return float((np.array(y_true) != np.array(y_pred)).mean())
 
+
+def make_pipeline(classifier):
+    """
+    Wraps imputer → scaler → classifier in a single Pipeline so preprocessing
+    is always fitted on training data only, even inside CV folds.
+    """
+    return Pipeline([
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler',  StandardScaler()),
+        ('clf',     RemappingMultiOutputClassifier(classifier)),
+    ])
+
+# param_grid keys are prefixed with clf__estimator__ because they pass
+# through Pipeline → RemappingMultiOutputClassifier → the actual estimator
+MODEL_CONFIGS = [
+    (
+        "Random Forest",
+        RandomForestClassifier(random_state=42, class_weight='balanced'),
+        {
+            'clf__estimator__n_estimators':     [100, 200, 300],
+            'clf__estimator__max_depth':        [None, 5, 10, 15],
+            'clf__estimator__max_features':     ['sqrt', 'log2'],
+            'clf__estimator__min_samples_split':[2, 5],
+            'clf__estimator__min_samples_leaf': [1, 2],
+        },
+    ),
+    (
+        "XGBoost",
+        XGBClassifier(eval_metric='mlogloss', random_state=42,
+                      use_label_encoder=False),
+        {
+            'clf__estimator__n_estimators':  [100, 200, 300],
+            'clf__estimator__max_depth':     [3, 5, 7],
+            'clf__estimator__learning_rate': [0.05, 0.1, 0.2],
+            'clf__estimator__subsample':     [0.8, 1.0],
+        },
+    ),
+    (
+        "SVM",
+        SVC(kernel='rbf', probability=True, random_state=42,
+            class_weight='balanced'),
+        {
+            'clf__estimator__C':     [0.1, 1, 10, 100],
+            'clf__estimator__gamma': ['scale', 'auto'],
+        },
+    ),
+    (
+        "KNN",
+        KNeighborsClassifier(),
+        {
+            'clf__estimator__n_neighbors': [3, 5, 7, 11],
+            'clf__estimator__weights':     ['uniform', 'distance'],
+            'clf__estimator__metric':      ['euclidean', 'manhattan'],
+        },
+    ),
+    (
+        "Logistic Regression",
+        LogisticRegression(max_iter=1000, random_state=42,
+                           class_weight='balanced'),
+        {
+            'clf__estimator__C':       [0.01, 0.1, 1, 10],
+            'clf__estimator__solver':  ['lbfgs', 'saga'],
+            'clf__estimator__penalty': ['l2'],
+        },
+    ),
+    (
+        "MLP",
+        MLPClassifier(max_iter=500, random_state=42, early_stopping=True),
+        {
+            'clf__estimator__hidden_layer_sizes': [(64, 32), (128, 64), (64, 64, 32)],
+            'clf__estimator__alpha':              [0.0001, 0.001, 0.01],
+            'clf__estimator__learning_rate_init': [0.001, 0.01],
+        },
+    ),
+]
+
+def run_search(csv_path: str, feature_cols: list, label_cols: list,
+               view_name: str):
+
+    print("\n")
+    print(f"  {view_name} View — Group-aware hyperparameter search")
+    df = pd.read_csv(csv_path)
+    validate_columns(df, feature_cols + label_cols + ['video_name'], csv_path)
+
+    groups = df['video_name'].values
+    X      = df[feature_cols]
+    y      = df[label_cols]
+
+    # group-aware split — no video appears in both train and test
+    gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+    train_idx, test_idx = next(gss.split(X, y, groups=groups))
+
+    X_train, X_test   = X.iloc[train_idx], X.iloc[test_idx]
+    y_train, y_test   = y.iloc[train_idx], y.iloc[test_idx]
+    groups_train      = groups[train_idx]
+
+    y_train_r, y_test_r = remap_labels(y_train, y_test)
+
+    print(f"  Train samples: {len(X_train)}  |  Test samples: {len(X_test)}")
+    print(f"  Unique train videos: {len(np.unique(groups_train))}  "
+          f"|  Unique test videos: {len(np.unique(groups[test_idx]))}")
+
+    inner_cv = GroupKFold(n_splits=5)
+
+    from sklearn.metrics import make_scorer
+    scorer = make_scorer(multioutput_f1)
+
+    best_results = []
+    for name, base_est, param_grid in MODEL_CONFIGS:
+        print(f"\n  Searching {name}...")
+        pipeline = make_pipeline(base_est)
+
+        try:
+            gs = GridSearchCV(
+                pipeline,
+                param_grid  = param_grid,
+                cv          = inner_cv,
+                scoring     = scorer,
+                n_jobs      = -1,
+                verbose     = 0,
+                refit       = True,
+                error_score = 0,
+            )
+            gs.fit(X_train, y_train_r, groups=groups_train)
+
+            best_cv_f1  = gs.best_score_
+            best_params = gs.best_params_
+            best_pipe   = gs.best_estimator_
+            y_pred = best_pipe.predict(X_test)
+            test_f1  = multioutput_f1(y_test_r.values, y_pred)
+            test_acc = exact_match(y_test_r.values, y_pred)
+            test_ham = hamming(y_test_r.values, y_pred)
+            y_pred_df    = pd.DataFrame(y_pred, columns=label_cols)
+            y_test_reset = y_test_r.reset_index(drop=True)
+            per_label_f1 = {
+                col: f1_score(y_test_reset[col], y_pred_df[col],
+                              average='weighted', zero_division=0)
+                for col in label_cols
+            }
+
+            best_results.append({
+                'name':      name,
+                'cv_f1':     best_cv_f1,
+                'test_f1':   test_f1,
+                'test_acc':  test_acc,
+                'test_ham':  test_ham,
+                'params':    best_params,
+                'per_label': per_label_f1,
+                'pipeline':  best_pipe,
+            })
+
+            print(f"    Best CV F1   : {best_cv_f1:.3f}")
+            print(f"    Test F1      : {test_f1:.3f}")
+            print(f"    Exact Match  : {test_acc:.3f}")
+            print(f"    Hamming Loss : {test_ham:.3f}")
+            print(f"    Best params  : {best_params}")
+            print(f"    Per-label F1 :")
+            for col, score in per_label_f1.items():
+                print(f"      {col:30s}  {score:.3f}")
+
+        except Exception as exc:
+            print(f"    FAILED: {exc}")
+            best_results.append({
+                'name': name, 'cv_f1': 0, 'test_f1': 0,
+                'test_acc': 0, 'test_ham': 1,
+                'params': {}, 'per_label': {}, 'pipeline': None,
+            })
+
+    # majority vote across the top 3 by CV F1
+    print(f"\n  Building ensemble from top-3 CV performers...")
+    top3 = sorted(best_results, key=lambda r: r['cv_f1'], reverse=True)[:3]
+    print(f"  Ensemble members: {[r['name'] for r in top3]}")
+
+    try:
+        # GridSearchCV already refits on full train so pipelines are ready to use
+        ensemble_preds = np.array([
+            r['pipeline'].predict(X_test) for r in top3
+        ])  # shape (3, n_test, n_labels)
+
+        # Majority vote per label per sample
+        from scipy.stats import mode
+        voted = np.apply_along_axis(
+            lambda x: mode(x, keepdims=True).mode[0], 0, ensemble_preds
+        )  # shape (n_test, n_labels)
+
+        ens_f1  = multioutput_f1(y_test_r.values, voted)
+        ens_acc = exact_match(y_test_r.values, voted)
+        ens_ham = hamming(y_test_r.values, voted)
+
+        print(f"    Ensemble Test F1      : {ens_f1:.3f}")
+        print(f"    Ensemble Exact Match  : {ens_acc:.3f}")
+        print(f"    Ensemble Hamming Loss : {ens_ham:.3f}")
+
+        best_results.append({
+            'name': f"Ensemble ({'+'.join(r['name'] for r in top3)})",
+            'cv_f1': np.mean([r['cv_f1'] for r in top3]),
+            'test_f1': ens_f1,
+            'test_acc': ens_acc,
+            'test_ham': ens_ham,
+            'params': {}, 'per_label': {}, 'pipeline': None,
+        })
+
+    except Exception as exc:
+        print(f"    Ensemble FAILED: {exc}")
+
+    # Summary table 
+    print("\n")
+    print(f"  {view_name} — Final Rankings (by Test F1)")
+    print(f"  {'Model':<40} {'CV F1':>6}  {'Test F1':>7}  "
+          f"{'Exact':>5}  {'Hamming':>7}")
+    print(f"  {'─'*40} {'─'*6}  {'─'*7}  {'─'*5}  {'─'*7}")
+    for r in sorted(best_results, key=lambda x: x['test_f1'], reverse=True):
+        print(f"  {r['name']:<40} {r['cv_f1']:>6.3f}  {r['test_f1']:>7.3f}  "
+              f"{r['test_acc']:>5.3f}  {r['test_ham']:>7.3f}")
+
+    best = max(best_results, key=lambda r: r['test_f1'])
+    print(f"\n  ✓ Best model for {view_name}: {best['name']}")
+    print(f"    Test F1={best['test_f1']:.3f}  "
+          f"Exact={best['test_acc']:.3f}  "
+          f"Hamming={best['test_ham']:.3f}")
+    if best['params']:
+        print(f"    Params: {best['params']}")
+
+    return best_results
+
+
+# Entry point
 if __name__ == "__main__":
-    front_params, front_score = tune_front()
-    side_params,  side_score  = tune_side()
+    front_results = run_search(FRONT_CSV, FRONT_FEATURES, FRONT_LABELS, "Front")
+    side_results  = run_search(SIDE_CSV,  SIDE_FEATURES,  SIDE_LABELS,  "Side")
 
-    print("\n Summary of best hyperparameters: ")
-    print(f"  Front (RF)     CV F1={front_score:.3f}  params={front_params}")
-    print(f"  Side  (XGB)    CV F1={side_score:.3f}  params={side_params}")
+    print("\n\n" + "="*65)
+    print("  FINAL SUMMARY")
+    print("="*65)
+
+    for view, results in [("Front", front_results), ("Side", side_results)]:
+        best = max(results, key=lambda r: r['test_f1'])
+        print(f"\n  {view} View  →  Best: {best['name']}")
+        print(f"    CV F1={best['cv_f1']:.3f}  Test F1={best['test_f1']:.3f}  "
+              f"Exact={best['test_acc']:.3f}  Hamming={best['test_ham']:.3f}")

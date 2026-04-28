@@ -1,8 +1,8 @@
 import pandas as pd
 
 # Load CSVs
-features = pd.read_csv("side_view_features.csv")
-labels = pd.read_csv("side_view_labels.csv")
+features = pd.read_csv("front_view_features.csv")
+labels = pd.read_csv("front_view_labels.csv")
 
 # Ensure video_name is numeric
 features["video_name"] = pd.to_numeric(features["video_name"], errors="coerce")
@@ -36,6 +36,6 @@ label_cols = [col for col in labels.columns if col != "video_name"]
 merged = merged[["video_name"] + feature_cols[1:] + label_cols]
 
 # Save merged CSV
-merged.to_csv("side_view_merged.csv", index=False)
+merged.to_csv("front_view_merged.csv", index=False)
 
-print("✅ Merge complete! Saved as 'side_view_merged.csv'.")
+print("✅ Merge complete! Saved as 'front_view_merged.csv'.")
