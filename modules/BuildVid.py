@@ -3,7 +3,7 @@ import cv2
 
 def frames_to_video(frame_folder, output_path, fps=30, resize=None):
     """
-    Convert a folder of frames into a video file.
+    Convert a folder of frames into a video file. (for labelling)
 
     Args:
         frame_folder (str): Path to folder containing frames.
@@ -56,7 +56,7 @@ def convert_all_folders_to_videos(root_path, output_root, fps=30, resize=None):
         print(f"[{i}/{len(folders)}] Converting {folder} to video...")
         frames_to_video(folder_path, output_path, fps=fps, resize=resize)
 
-# Paths to your frame datasets
+# Paths to frame datasets
 front_frames_root = "dataset/front"
 side_frames_root = "dataset/side"
 

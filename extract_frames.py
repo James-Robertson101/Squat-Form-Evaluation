@@ -6,7 +6,6 @@ import shutil
 def extract_frames(video_path, output_folder, fps=30, overwrite=True):
     """
     Splits a video into individual frames saved as JPGs.
-
     fps: how many frames per second to extract.
     """
     if overwrite and os.path.exists(output_folder):

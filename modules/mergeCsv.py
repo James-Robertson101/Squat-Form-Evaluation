@@ -1,5 +1,4 @@
 import pandas as pd
-
 # Load CSVs
 features = pd.read_csv("front_view_features.csv")
 labels = pd.read_csv("front_view_labels.csv")
@@ -10,9 +9,6 @@ labels["video_name"] = pd.to_numeric(labels["video_name"], errors="coerce")
 
 # Sort by video_name
 features = features.sort_values(by="video_name").reset_index(drop=True)
-# output sorted features csv
-features.to_csv("sorted_features.csv", index=False)
-
 labels = labels.sort_values(by="video_name").reset_index(drop=True)
 
 # Check for missing or extra videos
@@ -22,6 +18,7 @@ labels_videos = set(labels["video_name"])
 missing_in_features = labels_videos - features_videos
 missing_in_labels = features_videos - labels_videos
 
+# For debugging
 if missing_in_features:
     print(f"Warning: these videos are in labels but not in features: {missing_in_features}")
 if missing_in_labels:
@@ -38,4 +35,4 @@ merged = merged[["video_name"] + feature_cols[1:] + label_cols]
 # Save merged CSV
 merged.to_csv("front_view_merged.csv", index=False)
 
-print("✅ Merge complete! Saved as 'front_view_merged.csv'.")
+print("Merge complete! Saved as 'front_view_merged.csv'.")

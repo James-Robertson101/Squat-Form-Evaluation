@@ -110,7 +110,7 @@ def serve_frame(job_id, frame_idx):
     )
 
 
-@app.route("/cleanup/<job_id>", methods=["DELETE"])
+@app.route("/cleanup/<job_id>", methods=["POST","DELETE"])
 def cleanup(job_id):
     if not _valid_job_id(job_id):
         abort(400)

@@ -1,12 +1,12 @@
 import os
-
+# Function used to rename folders of video frames 
 def rename_folders_sequentially(parent_folder):
     folders = [
         f for f in os.listdir(parent_folder)
         if os.path.isdir(os.path.join(parent_folder, f)) and f.isdigit()
     ]
 
-    # Sort numerically (important!)
+    # Sort numerically
     folders = sorted(folders, key=lambda x: int(x))
 
     for new_index, folder in enumerate(folders, start=1):

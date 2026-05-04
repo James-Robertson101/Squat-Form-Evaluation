@@ -32,7 +32,7 @@ R_FOOT_IDX = mp_pose_module.PoseLandmark.RIGHT_FOOT_INDEX.value
 
 VIS_THRESHOLD = 0.5
 
-# Custom drawing spec colours ---------------------------------------------------
+# Custom drawing spec colours 
 _LANDMARK_STYLE = mp_drawing.DrawingSpec(
     color=(0, 255, 180), thickness=2, circle_radius=3
 )
@@ -139,7 +139,7 @@ def extract_squat_features_from_frames(
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results   = pose.process(frame_rgb)
 
-        # --- annotate and save regardless of visibility -------------------------
+        # annotate and save regardless of visibility 
         if annotated_out is not None:
             annotated = frame.copy()
             if results.pose_landmarks:
@@ -151,7 +151,7 @@ def extract_squat_features_from_frames(
                     connection_drawing_spec = _CONNECTION_STYLE,
                 )
             cv2.imwrite(os.path.join(annotated_out, frame_file), annotated)
-        # ------------------------------------------------------------------------
+        
 
         if not results.pose_landmarks:
             all_landmarks.append(None)

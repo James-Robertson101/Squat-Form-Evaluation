@@ -4,8 +4,8 @@ save_models.py
 Trains and saves the final models using the best hyperparameters found
 during group-aware hyperparameter search:
 
-  Front view  →  KNN   (Test F1=0.817, Exact=0.437, Hamming=0.166)
-  Side view   →  Random Forest  (Test F1=0.752, Exact=0.319, Hamming=0.227)
+  Front view  →  KNN 
+  Side view   →  XGBoost
 
 The full sklearn Pipeline (imputer → scaler → classifier) is saved as a
 single .pkl file per view, so inference just calls pipeline.predict(X)
@@ -32,12 +32,12 @@ from sklearn.ensemble import VotingClassifier
 from xgboost import XGBClassifier
 from Remapper import RemappingMultiOutputClassifier
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
+# Paths
 FRONT_CSV  = r"C:\Users\james\Squat Form Evaluation\datasets\front\front_view_merged.csv"
 SIDE_CSV   = r"C:\Users\james\Squat Form Evaluation\datasets\side\side_view_merged.csv"
 MODELS_DIR = "models"
 
-# ── Feature columns ───────────────────────────────────────────────────────────
+# Feature columns
 FRONT_FEATURES = [
     "valgus_min", "valgus_max", "valgus_variation",
     "torso_lateral_peak", "symmetry_mean",
@@ -59,73 +59,37 @@ SIDE_FEATURES = [
     "hip_below_knee_frac",
 ]
 
-# ── Label columns ─────────────────────────────────────────────────────────────
+# Label columns 
 FRONT_LABELS = ["knee_valgus", "knee_varus", "lateral_hip_shift",
                 "torso_lateral_lean", "foot_stability"]
 
 SIDE_LABELS  = ["squat_depth", "lumbar_flexion", "forward_lean",
                 "descent_control", "ascent_sticking", "foot_stability"]
 
-# ── Best hyperparameters from group-aware search ──────────────────────────────
-# Front: KNN  (Test F1=0.817, Exact Match=0.437, Hamming=0.166)
-# FRONT_MODEL = MultiOutputClassifier(
-#     KNeighborsClassifier(
-#         n_neighbors=7,
-#         weights='distance',
-#         metric='manhattan',
-#     )
-# )
-#defining models for ensemble classifier
-rf = RandomForestClassifier(
-    n_estimators=100,
-    max_depth=None,
-    max_features='sqrt',
-    min_samples_split=5,
-    min_samples_leaf=1,
-    random_state=42,
-    class_weight='balanced'
+
+
+FRONT_MODEL = MultiOutputClassifier(
+    KNeighborsClassifier(
+        n_neighbors=7,
+        weights='distance',
+        metric='euclidean',
+    )
 )
 
-xgb = XGBClassifier(
-    n_estimators=200,
-    max_depth=5,
-    learning_rate=0.05,
-    subsample=0.8,
-    eval_metric='mlogloss',
-    random_state=42,
-    use_label_encoder=False
-)
-
-knn = KNeighborsClassifier(
-    n_neighbors=7,
-    weights='distance',
-    metric='manhattan'
-)
-
-front_ensemble = VotingClassifier(
-    estimators=[
-        ('rf', rf),
-        ('knn', knn),
-        ('xgb',xgb),
-    ],
-    voting='hard'  # majority vote (matches CV logic)
-)
-FRONT_MODEL = RemappingMultiOutputClassifier(front_ensemble)
-# Side: Random Forest  (Test F1=0.752, Exact Match=0.319, Hamming=0.227)
 SIDE_MODEL = MultiOutputClassifier(
-    RandomForestClassifier(
+    XGBClassifier(
+        learning_rate=0.2,
+        max_depth=5,
         n_estimators=100,
-        max_depth=15,
-        max_features='sqrt',
-        min_samples_leaf=2,
-        min_samples_split=5,
+        subsample=0.8,
+        eval_metric='mlogloss',
         random_state=42,
-        class_weight='balanced_subsample',
+        use_label_encoder=False,
     )
 )
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# Helpers 
 def validate_columns(df: pd.DataFrame, required: list, csv_path: str) -> None:
     missing = [c for c in required if c not in df.columns]
     if missing:
@@ -152,7 +116,7 @@ def remap_labels(y: pd.DataFrame):
     return y_remapped, encoders
 
 
-# ── Build pipeline ────────────────────────────────────────────────────────────
+# Build pipeline 
 def build_pipeline(classifier) -> Pipeline:
     """
     Returns imputer → scaler → classifier as a single Pipeline.
@@ -166,7 +130,7 @@ def build_pipeline(classifier) -> Pipeline:
     ])
 
 
-# ── Fit and save ──────────────────────────────────────────────────────────────
+# Fit and save
 def fit_and_save(
     csv_path:     str,
     feature_cols: list,
@@ -209,7 +173,7 @@ def fit_and_save(
     print(f"  Saved → {out_dir}/{prefix}_pipeline.pkl  (+ encoders, feature_cols, label_cols)")
 
 
-# ── Inference helper (shows how to use saved models) ─────────────────────────
+# Inference helper 
 def predict_from_features(prefix: str, feature_dict: dict,
                            out_dir: str = MODELS_DIR) -> dict:
     """
@@ -233,7 +197,7 @@ def predict_from_features(prefix: str, feature_dict: dict,
             for col, pred in zip(label_cols, y_pred)}
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# Main 
 if __name__ == "__main__":
 
     fit_and_save(
@@ -259,7 +223,7 @@ if __name__ == "__main__":
         size_kb = os.path.getsize(os.path.join(MODELS_DIR, f)) / 1024
         print(f"    {f:<40}  {size_kb:>8.1f} KB")
 
-    # ── Quick sanity check ────────────────────────────────────────────────────
+    #  Quick sanity check
     print("\n  Sanity check — predicting first row of each dataset:")
 
     for prefix, csv, features in [

@@ -1,13 +1,11 @@
-
-
-// State 
+// State variables
 let currentReps    = [];
 let currentRepIdx  = 0;
 let jobId          = null;
 let frameCount     = 0;
 let currentFrame   = 0;
 let playbackInterval = null;
-let playbackaFps    = 15;   // controlled by speed selector
+let playbackFps    = 15;   // controlled by speed selector (this is the default option)
 
 // Frame preload cache — keeps recent decoded <img> objects in memory
 const CACHE_AHEAD  = 40;
@@ -53,7 +51,7 @@ function setFileDisplay(name) {
   el.style.display = 'inline-block';
 }
 
-// Analysis
+// Analysis function
 async function analyseVideo() {
   const view      = document.querySelector('input[name="view"]:checked').value;
   const statusBar = document.getElementById('status-bar');
@@ -68,9 +66,9 @@ async function analyseVideo() {
 
   // Clean up previous job frames
   if (jobId) {
-    navigator.sendBeacon(`/cleanup/${jobId}`);
-    jobId = null;
-  }
+  await fetch(`/cleanup/${jobId}`, { method: 'DELETE' });
+  jobId = null;
+}
 
   // Reset UI
   errBanner.style.display   = 'none';

@@ -1,6 +1,5 @@
 """
 confusion_matrices.py
-
 Proper evaluation script:
 - Splits data into train/test using GroupShuffleSplit
 - Trains model ONLY on train split
@@ -24,12 +23,12 @@ from save_models import (
     SIDE_MODEL
 )
 
-# ── Paths ─────────────────────────────────────────────────────────
+# Paths 
 FRONT_CSV  = r"C:\Users\james\Squat Form Evaluation\datasets\front\front_view_merged.csv"
 SIDE_CSV   = r"C:\Users\james\Squat Form Evaluation\datasets\side\side_view_merged.csv"
 OUTPUT_DIR = "confusion_matrices"
 
-# ── Features ──────────────────────────────────────────────────────
+# Features
 FRONT_FEATURES = [
     "valgus_min", "valgus_max", "valgus_variation",
     "torso_lateral_peak", "symmetry_mean",
@@ -51,14 +50,14 @@ SIDE_FEATURES = [
     "hip_below_knee_frac",
 ]
 
-# ── Labels ────────────────────────────────────────────────────────
+# Labels 
 FRONT_LABELS = ["knee_valgus", "knee_varus", "lateral_hip_shift",
                 "torso_lateral_lean", "foot_stability"]
 
 SIDE_LABELS  = ["squat_depth", "lumbar_flexion", "forward_lean",
                 "descent_control", "ascent_sticking", "foot_stability"]
 
-# ── Display names ─────────────────────────────────────────────────
+# Display names 
 LABEL_CLASS_NAMES = {
     "knee_valgus":        {0: "Fine",        1: "Mild",       2: "Severe"},
     "knee_varus":         {0: "Fine",        1: "Mild",       2: "Severe"},
@@ -73,7 +72,7 @@ LABEL_CLASS_NAMES = {
 }
 
 
-# ── Main function ─────────────────────────────────────────────────
+# Main function 
 def plot_confusion_matrices(csv_path, feature_cols, label_cols, prefix, out_dir):
 
     print(f"\n{prefix.upper()} view")
@@ -84,7 +83,7 @@ def plot_confusion_matrices(csv_path, feature_cols, label_cols, prefix, out_dir)
     X = df[feature_cols]
     y = df[label_cols]
 
-    # ── Train/test split ─────────────────────────────────────────
+    # Train/test split 
     gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
     train_idx, test_idx = next(gss.split(X, y, groups=groups))
 
@@ -97,7 +96,7 @@ def plot_confusion_matrices(csv_path, feature_cols, label_cols, prefix, out_dir)
     print(f"  Train size: {len(X_train)}")
     print(f"  Test size : {len(X_test)}")
 
-    # ── Remap labels ─────────────────────────────────────────────
+    # Remap labels 
     y_train_remap, encoders = remap_labels(y_train)
 
     classifier = FRONT_MODEL if prefix == "front" else SIDE_MODEL
@@ -105,11 +104,11 @@ def plot_confusion_matrices(csv_path, feature_cols, label_cols, prefix, out_dir)
     pipeline = build_pipeline(classifier)
     pipeline.fit(X_train, y_train_remap)
 
-    # ── Predict ──────────────────────────────────────────────────
+    # Predict 
     y_pred_encoded = pipeline.predict(X_test)
     y_pred_df = pd.DataFrame(y_pred_encoded, columns=label_cols)
 
-    # ── Decode ───────────────────────────────────────────────────
+    # Decode
     decoders = {col: {v: k for k, v in enc.items()} for col, enc in encoders.items()}
 
     y_pred_decoded = pd.DataFrame({
@@ -117,7 +116,7 @@ def plot_confusion_matrices(csv_path, feature_cols, label_cols, prefix, out_dir)
         for col in label_cols
     })
 
-    # ── Plotting (FIXED INDENTATION HERE) ────────────────────────
+    # Plotting
     os.makedirs(out_dir, exist_ok=True)
 
     n_labels = len(label_cols)
@@ -191,7 +190,7 @@ def plot_confusion_matrices(csv_path, feature_cols, label_cols, prefix, out_dir)
     print(f"\nSaved → {out_path}")
 
 
-# ── Run ───────────────────────────────────────────────────────────
+# Run 
 if __name__ == "__main__":
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)

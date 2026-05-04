@@ -331,10 +331,9 @@ if __name__ == "__main__":
     front_results = run_search(FRONT_CSV, FRONT_FEATURES, FRONT_LABELS, "Front")
     side_results  = run_search(SIDE_CSV,  SIDE_FEATURES,  SIDE_LABELS,  "Side")
 
-    print("\n\n" + "="*65)
+    print("\n\n")
     print("  FINAL SUMMARY")
-    print("="*65)
-
+    
     for view, results in [("Front", front_results), ("Side", side_results)]:
         best = max(results, key=lambda r: r['test_f1'])
         print(f"\n  {view} View  →  Best: {best['name']}")
