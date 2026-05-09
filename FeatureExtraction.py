@@ -47,9 +47,16 @@ def natural_sort_key(s):
 
 
 def landmarks_visible(landmarks, indices, threshold=VIS_THRESHOLD):
-    return all(landmarks[i].visibility >= threshold for i in indices)
-
-
+    try:
+        return all(
+            hasattr(landmarks[i], "visibility") and
+            isinstance(landmarks[i].visibility, (int, float)) and
+            landmarks[i].visibility >= threshold
+            for i in indices
+        )
+    except (IndexError, AttributeError, TypeError):
+        return False
+    
 def build_rep_signal(landmarks_per_frame, view):
     hip_y_values = []
     for lm in landmarks_per_frame:
