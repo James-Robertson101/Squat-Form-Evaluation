@@ -15,9 +15,16 @@ A web-based squat analysis system that evaluates squat form using computer visio
 
 ---
 Demo
-
+Front:
 
 https://github.com/user-attachments/assets/b7022f06-c1bf-43df-8be3-75e2909ece90
+
+
+
+Side:
+
+
+https://github.com/user-attachments/assets/39a67d6b-0365-4208-b10c-33046aa34e62
 
 
 
