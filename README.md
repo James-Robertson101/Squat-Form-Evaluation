@@ -14,6 +14,8 @@ A web-based squat analysis system that evaluates squat form using computer visio
 - Clean Flask + JavaScript AJAX integration (no page reload)
 
 ---
+Demo
+https://github.com/user-attachments/assets/54bedd05-b2f2-4e08-8038-bf75d015f5bf
 
 ## How It Works
 
